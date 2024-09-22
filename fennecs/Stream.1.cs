@@ -279,6 +279,56 @@ public record Stream<C0>(Query Query, Match Match0) : IEnumerable<(Entity, C0)>,
         JobPool<UniformWork<U, C0>>.Return(jobs);
     }
 
+	public void Job2<U>(U uniform, UniformEntityComponentAction<U, C0> action)
+    {
+		AssertNoWildcards();
+        
+        var chunkSize = Math.Max(1, Count / Concurrency);
+
+        using var worldLock = World.Lock();
+        Countdown.Reset();
+
+        using var jobs = PooledList<UniformEntityWork<U, C0>>.Rent();
+
+        foreach (var table in Filtered)
+        {
+            using var join = table.CrossJoin<C0>(_streamTypes.AsSpan());
+
+
+            var count = table.Count; // storage.Length is the capacity, not the count.
+            var partitions = count / chunkSize + Math.Sign(count % chunkSize);
+            do
+            {
+                for (var chunk = 0; chunk < partitions; chunk++)
+                {
+                    Countdown.AddCount();
+
+                    var start = chunk * chunkSize;
+                    var length = Math.Min(chunkSize, count - start);
+
+                    var s0 = join.Select;
+
+                    var job = JobPool<UniformEntityWork<U, C0>>.Rent();
+                    job.Memory1 = s0.AsMemory(start, length);
+                    job.Action = action;
+                    job.Uniform = uniform;
+					job.Identities = table.IdentityStorage.AsMemory(start, length);
+					job.World = World;
+                    job.CountDown = Countdown;
+                    jobs.Add(job);
+
+                    ThreadPool.UnsafeQueueUserWorkItem(job, true);
+                }
+            } while (join.Iterate());
+        }
+
+        Countdown.Signal();
+        Countdown.Wait();
+
+        JobPool<UniformEntityWork<U, C0>>.Return(jobs);
+    }
+
+
     #endregion
 
     #region Stream.Raw

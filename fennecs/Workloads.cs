@@ -29,6 +29,27 @@ internal class UniformWork<U, C1> : IThreadPoolWorkItem
     }
 }
 
+internal class UniformEntityWork<U, C1> : IThreadPoolWorkItem
+{
+    public Memory<C1> Memory1 = null!;
+    public UniformEntityComponentAction<U, C1> Action = null!;
+    public CountdownEvent CountDown = null!;
+    public U Uniform = default!;
+	public Memory<Identity> Identities = null!;
+	public World World = null!;
+
+
+    public void Execute()
+    {
+		for (int i = 0; i < Memory1.Length; i++)
+		{
+			Entity entity = new Entity(World, Identities.Span[i]);
+			Action(Uniform, entity, ref Memory1.Span[i]);
+		}
+        CountDown.Signal();
+    }
+}
+
 internal class Work<C1, C2> : IThreadPoolWorkItem
 {
     public Memory<C1> Memory1 = null!;
